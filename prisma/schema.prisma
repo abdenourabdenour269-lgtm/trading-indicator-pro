@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,20 +10,160 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// User Management
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  avatar        String?
+  subscription  SubscriptionTier @default(FREE)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  signals       Signal[]
+  trades        Trade[]
+  alerts        Alert[]
+  subscriptions Subscription?
+  
+  @@map("users")
 }
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum SubscriptionTier {
+  FREE
+  PRO
+  VIP
+}
+
+// Subscription Management
+model Subscription {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier            SubscriptionTier @default(FREE)
+  startDate       DateTime @default(now())
+  endDate         DateTime?
+  isActive        Boolean  @default(true)
+  stripeCustomerId String?
+  stripeSubId     String?
+  
+  @@map("subscriptions")
+}
+
+// Trading Signals
+model Signal {
+  id            String      @id @default(cuid())
+  userId        String?
+  user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  symbol        String
+  timeframe     String
+  type          SignalType
+  strength      SignalStrength
+  price         Float
+  stopLoss      Float
+  takeProfit1   Float
+  takeProfit2   Float?
+  takeProfit3   Float?
+  status        SignalStatus @default(ACTIVE)
+  reason        String
+  indicators    String      // JSON string of indicator values
+  confidence    Float       // AI confidence percentage
+  createdAt     DateTime    @default(now())
+  closedAt      DateTime?
+  result        TradeResult?
+  
+  @@index([symbol, timeframe])
+  @@index([createdAt])
+  @@map("signals")
+}
+
+enum SignalType {
+  BUY
+  SELL
+}
+
+enum SignalStrength {
+  WEAK
+  MODERATE
+  STRONG
+}
+
+enum SignalStatus {
+  ACTIVE
+  HIT_TP1
+  HIT_TP2
+  HIT_TP3
+  HIT_SL
+  CLOSED
+}
+
+enum TradeResult {
+  WIN
+  LOSS
+  BREAKEVEN
+}
+
+// Backtesting Trades
+model Trade {
+  id              String      @id @default(cuid())
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  symbol          String
+  timeframe       String
+  type            SignalType
+  entryPrice      Float
+  exitPrice       Float?
+  stopLoss        Float
+  takeProfit      Float
+  size            Float
+  pnl             Float?
+  pnlPercent      Float?
+  result          TradeResult?
+  openedAt        DateTime    @default(now())
+  closedAt        DateTime?
+  duration        Int?        // in minutes
+  
+  @@index([symbol, timeframe])
+  @@index([openedAt])
+  @@map("trades")
+}
+
+// User Alerts
+model Alert {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol      String
+  condition   String
+  price       Float
+  message     String
+  isTriggered Boolean     @default(false)
+  notifyEmail Boolean     @default(true)
+  notifyTelegram Boolean  @default(false)
+  createdAt   DateTime    @default(now())
+  triggeredAt DateTime?
+  
+  @@map("alerts")
+}
+
+// Market Data Cache
+model MarketData {
+  id          String   @id @default(cuid())
+  symbol      String
+  timeframe   String
+  data        String   // JSON string of OHLCV data
+  updatedAt   DateTime @default(now())
+  
+  @@unique([symbol, timeframe])
+  @@map("market_data")
+}
+
+// System Configuration
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  updatedAt   DateTime @updatedAt
+  
+  @@map("system_config")
 }
